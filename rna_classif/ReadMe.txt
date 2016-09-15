@@ -1,0 +1,1 @@
+Rscript classif.r -args <path/to/data> <path/to/classes> <path/to/config>

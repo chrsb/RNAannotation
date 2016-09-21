@@ -22,14 +22,28 @@ classes <- read.table(args[2], sep="\t", header = FALSE)
 # first column contains classfier name, second column is either empty or a parsable statement (data.frame with the tuning params for the classifier)
 config <- read.table(args[3], sep="\t", header = FALSE)
 
-# getting only the first 5 k entries
-data <- data[1:2500, ]
-classes <- classes[1:2500, ]
 # it's doing something funky if the name column is left in (some sort of giant data structure gets built and I end up with 'Error: cannot allocate vector of size 46.0 Gb')
 data$V1 <- NULL
 
 # glueing the class column to the data
 data <- data.frame(data, Class = classes[, 2])
+
+fullData <- data
+
+# ORF < 200
+data <- data[data$V3 < 200,]
+
+# getting data for specific classes (need to figure out how to do this in a loop)
+ncData <- data[data$Class == 'ncRNA',]
+mData <- data[data$Class == 'mRNA',]
+otherData <- data[data$Class == 'other',]
+
+# making the lists shorter (even out the class distribution)
+ncData <- ncData[1:100, ]
+mData <- mData[1:100, ]
+otherData <- otherData[1:100, ]
+
+data <- rbind(ncData, mData, otherData)
 
 set.seed(100)
 
@@ -41,50 +55,62 @@ fitControl <- trainControl(## 10-fold CV
                            number = 10,
                            ## repeated ten times
                            repeats = 10)
-						   
-set.seed(100)
 
-results <- 1:nrow(config)
+results <- list()
 
 for (i in 1:nrow(config)) {
+    set.seed(100)
     # checks if the second config column is empty and parses the grid function if it's there
     if (as.character(config[i, 2] != "")) {
-        #results[i] <- train(Class ~ ., data = trainingSet, 
-        result <- train(Class ~ ., data = trainingSet, 
+        results[i] <- list(train(Class ~ ., data = trainingSet, 
                           method = as.character(config[i, 1]), 
                           trControl = fitControl,
-                          ## This last option is actually one
-                          ## for gbm() that passes through
                           verbose = FALSE,
-                          tuneGrid = eval(parse(text=as.character(config[i, 2]))))
-        print(result) 
-        plot(result) 
-        
-        # this needs to move to its own loop when I figure out how to accumulate results in a list
-        x_test <- testSet[, 1:7]
-        y_test <- testSet[, 8]
-        predictions <- predict(result, x_test)
-        confusionMatrix(predictions, y_test)
+                          tuneGrid = eval(parse(text=as.character(config[i, 2])))))
+
     } else {
-        #results[i] <- train(Class ~ ., data = trainingSet, 
-        result <- train(Class ~ ., data = trainingSet, 
+        results[i] <- list(train(Class ~ ., data = trainingSet, 
                           method = as.character(config[i, 1]), 
                           trControl = fitControl,
-                          ## This last option is actually one
-                          ## for gbm() that passes through
-                          verbose = FALSE)
-        print(result) 
-        plot(result) 
-        
-        # this needs to move to its own loop when I figure out how to accumulate results in a list
-        x_test <- testSet[, 1:7]
-        y_test <- testSet[, 8]
-        predictions <- predict(result, x_test)
-        confusionMatrix(predictions, y_test)
+                          verbose = FALSE))
     }
 }
 
 for (i in 1:nrow(config)) {
-    # predict - the prediction stuff moves here
+    print(results[[i]]) 
+    plot(results[[i]]) 
+    
+    # info about the classifier
+    # gbm training with 225 entries (~50% accuracy)
+    # V7  V7 39.957349 (Exp_level)
+    # V3  V3 27.171016 (ORFlength)
+    # V4  V4 18.636434 (SeqLength)
+    # V5  V5 13.225915 (GC_count)
+    # V2  V2  1.009286 (Dir)
+    # V6  V6  0.000000 (PFAM_E-value)
+    # V8  V8  0.000000 (RFAM_E-Value)
+    summary(results[[i]])
+    
+    # classifying the test set
+    x_test <- testSet[, 1:7]
+    y_test <- testSet[, 8]
+    predictions <- predict(results[[i]], x_test)
+    confusionMatrix(predictions, y_test)
+    
+    # classifying everything we have
+    x_test <- fullData[, 1:7]
+    y_test <- fullData[, 8]
+    predictions <- predict(results[[i]], x_test)
+    confusionMatrix(predictions, y_test)
+    
+    # Reference
+    # Prediction  mRNA ncRNA other
+    # mRNA  23031  3588 21083
+    # ncRNA  2782  1311  7791
+    # other   996  1195 16779
+    #
+    # Overall Statistics
+    #
+    # Accuracy : 0.5235  
 }
 

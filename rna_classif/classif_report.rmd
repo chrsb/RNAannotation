@@ -1,0 +1,21 @@
+```{r}
+for (i in 1:nrow(config)) {
+    cat("\n\nResults for ", config[i, 1], "\n\n")
+  
+    print(results[[i]]) 
+	x11()
+    plot(results[[i]]) 
+    
+    print(summary(results[[i]]))
+	
+    summary(results[[i]])
+    
+    # classifying everything we have
+    x_test <- fullData[, 1:7]
+    y_test <- fullData[, 8]
+    predictions <- predict(results[[i]], x_test)
+    print(confusionMatrix(predictions, y_test))
+    
+    print(results[[i]]$finalModel)
+}
+```
